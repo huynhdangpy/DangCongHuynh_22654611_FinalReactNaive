@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -14,6 +14,10 @@ import { getDb } from "../src/db";
 export default function Index() {
   const [contacts, setContacts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Search + Filter
+  const [search, setSearch] = useState("");
+  const [showFavOnly, setShowFavOnly] = useState(false);
 
   // Modal thêm/sửa
   const [modalVisible, setModalVisible] = useState(false);
@@ -119,7 +123,7 @@ export default function Index() {
   }
 
   // ======================
-  //     DELETE CONTACT (CÂU 7)
+  //     DELETE CONTACT
   // ======================
   async function deleteContact(id: number) {
     Alert.alert(
@@ -154,7 +158,24 @@ export default function Index() {
   }
 
   // ======================
-  //     UI LIST ITEM
+  //     SEARCH + FAVORITE FILTER (useMemo)
+  // ======================
+  const filteredContacts = useMemo(() => {
+    const keyword = search.toLowerCase().trim();
+
+    return contacts.filter((c) => {
+      const matchText =
+        c.name.toLowerCase().includes(keyword) ||
+        (c.phone && c.phone.includes(keyword));
+
+      const matchFav = showFavOnly ? Number(c.favorite) === 1 : true;
+
+      return matchText && matchFav;
+    });
+  }, [search, showFavOnly, contacts]);
+
+  // ======================
+  //     LIST ITEM UI
   // ======================
   const renderItem = ({ item }: any) => (
     <View style={styles.card}>
@@ -194,20 +215,38 @@ export default function Index() {
     <View style={styles.container}>
       <Text style={styles.title}>Danh sách liên hệ</Text>
 
+      {/* Ô tìm kiếm */}
+      <TextInput
+        style={styles.searchBox}
+        placeholder="Tìm kiếm theo tên hoặc số điện thoại..."
+        value={search}
+        onChangeText={setSearch}
+      />
+
+      {/* Nút lọc favorite */}
+      <TouchableOpacity
+        style={styles.filterBtn}
+        onPress={() => setShowFavOnly(!showFavOnly)}
+      >
+        <Text style={{ color: "white", fontWeight: "600" }}>
+          {showFavOnly ? "Hiện tất cả" : "Chỉ Favorite"}
+        </Text>
+      </TouchableOpacity>
+
       {loading ? (
         <Text style={styles.empty}>Đang tải...</Text>
-      ) : contacts.length === 0 ? (
-        <Text style={styles.empty}>Chưa có liên hệ nào.</Text>
+      ) : filteredContacts.length === 0 ? (
+        <Text style={styles.empty}>Không tìm thấy liên hệ.</Text>
       ) : (
         <FlatList
-          data={contacts}
+          data={filteredContacts}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderItem}
           contentContainerStyle={{ paddingBottom: 100 }}
         />
       )}
 
-      {/* Nút + */}
+      {/* Nút thêm (+) */}
       <TouchableOpacity
         style={styles.fab}
         onPress={() => {
@@ -287,6 +326,26 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: "#222",
   },
+
+  // Search
+  searchBox: {
+    backgroundColor: "#FFF",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#DDD",
+  },
+
+  filterBtn: {
+    backgroundColor: "#007bff",
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+    marginBottom: 15,
+  },
+
   card: {
     backgroundColor: "white",
     padding: 16,
