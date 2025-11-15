@@ -15,8 +15,12 @@ export default function Index() {
   const [contacts, setContacts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal form state
+  // Modal thêm/sửa
   const [modalVisible, setModalVisible] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+
+  // form fields
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -38,7 +42,68 @@ export default function Index() {
   }
 
   // ======================
-  //   CÂU 5 – TOGGLE FAVORITE
+  //     THÊM CONTACT
+  // ======================
+  async function addContact() {
+    if (name.trim() === "") {
+      Alert.alert("Lỗi", "Tên không được để trống.");
+      return;
+    }
+    if (email.trim() !== "" && !email.includes("@")) {
+      Alert.alert("Lỗi", "Email không hợp lệ.");
+      return;
+    }
+
+    const db = await getDb();
+
+    await db.runAsync(
+      `INSERT INTO contacts (name, phone, email, favorite, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [name, phone, email, 0, Date.now()]
+    );
+
+    resetForm();
+    loadContacts();
+  }
+
+  // ======================
+  //     CÂU 6 – SỬA CONTACT
+  // ======================
+  async function updateContact() {
+    if (name.trim() === "") {
+      Alert.alert("Lỗi", "Tên không được để trống");
+      return;
+    }
+    if (email.trim() !== "" && !email.includes("@")) {
+      Alert.alert("Lỗi", "Email không hợp lệ.");
+      return;
+    }
+    if (editingId === null) return;
+
+    const db = await getDb();
+
+    await db.runAsync(
+      `UPDATE contacts
+       SET name = ?, phone = ?, email = ?
+       WHERE id = ?`,
+      [name, phone, email, editingId]
+    );
+
+    resetForm();
+    loadContacts();
+  }
+
+  function resetForm() {
+    setName("");
+    setPhone("");
+    setEmail("");
+    setEditingId(null);
+    setIsEdit(false);
+    setModalVisible(false);
+  }
+
+  // ======================
+  //     TOGGLE FAVORITE
   // ======================
   async function toggleFavorite(id: number, favorite: number) {
     const newValue = favorite === 1 ? 0 : 1;
@@ -53,54 +118,43 @@ export default function Index() {
   }
 
   // ======================
-  //   THÊM CONTACT (CÂU 4)
+  //     MỞ MODAL EDIT
   // ======================
-  async function addContact() {
-    if (name.trim() === "") {
-      Alert.alert("Lỗi", "Tên không được để trống.");
-      return;
-    }
+  function openEditModal(item: any) {
+    setEditingId(item.id);
+    setName(item.name);
+    setPhone(item.phone);
+    setEmail(item.email);
 
-    if (email.trim() !== "" && !email.includes("@")) {
-      Alert.alert("Lỗi", "Email không hợp lệ.");
-      return;
-    }
-
-    const db = await getDb();
-
-    await db.runAsync(
-      `INSERT INTO contacts (name, phone, email, favorite, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
-      [name, phone, email, 0, Date.now()]
-    );
-
-    setName("");
-    setPhone("");
-    setEmail("");
-    setModalVisible(false);
-
-    loadContacts();
+    setIsEdit(true);
+    setModalVisible(true);
   }
 
   // ======================
-  //   RENDER ITEM
+  //     UI LIST ITEM
   // ======================
   const renderItem = ({ item }: any) => (
     <View style={styles.card}>
-      <View style={{ flexDirection: "column" }}>
+      <View style={{ flexDirection: "column", flex: 1 }}>
         <Text style={styles.name}>{item.name}</Text>
         <Text style={styles.phone}>
           {item.phone || "Không có số điện thoại"}
         </Text>
       </View>
 
-      {/* ICON FAVORITE – CHẠM ĐỂ TOGGLE */}
+      {/* ICON FAVORITE */}
       <TouchableOpacity
         onPress={() => toggleFavorite(item.id, Number(item.favorite))}
+        style={{ marginRight: 12 }}
       >
         <Text style={{ fontSize: 26 }}>
           {Number(item.favorite) === 1 ? "⭐" : "☆"}
         </Text>
+      </TouchableOpacity>
+
+      {/* NÚT SỬA */}
+      <TouchableOpacity onPress={() => openEditModal(item)}>
+        <Text style={{ fontSize: 20 }}>✏️</Text>
       </TouchableOpacity>
     </View>
   );
@@ -122,19 +176,24 @@ export default function Index() {
         />
       )}
 
-      {/* Nút thêm liên hệ */}
+      {/* Nút + */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => setModalVisible(true)}
+        onPress={() => {
+          resetForm();
+          setModalVisible(true);
+        }}
       >
         <Text style={{ fontSize: 32, color: "white" }}>＋</Text>
       </TouchableOpacity>
 
-      {/* Modal Thêm contact */}
+      {/* Modal thêm/sửa */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalWrapper}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Thêm liên hệ mới</Text>
+            <Text style={styles.modalTitle}>
+              {isEdit ? "Sửa liên hệ" : "Thêm liên hệ"}
+            </Text>
 
             <TextInput
               placeholder="Tên (bắt buộc)"
@@ -160,16 +219,18 @@ export default function Index() {
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.btn, { backgroundColor: "#CCC" }]}
-                onPress={() => setModalVisible(false)}
+                onPress={resetForm}
               >
                 <Text style={styles.btnText}>Hủy</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.btn, { backgroundColor: "#007bff" }]}
-                onPress={addContact}
+                onPress={isEdit ? updateContact : addContact}
               >
-                <Text style={styles.btnText}>Lưu</Text>
+                <Text style={styles.btnText}>
+                  {isEdit ? "Cập nhật" : "Lưu"}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -201,7 +262,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 14,
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
 
     shadowColor: "#000",
@@ -216,9 +276,9 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   phone: {
-    marginTop: 4,
     fontSize: 15,
     color: "#777",
+    marginTop: 3,
   },
   empty: {
     marginTop: 60,
@@ -234,9 +294,9 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 50,
-    alignItems: "center",
     justifyContent: "center",
-    elevation: 5,
+    alignItems: "center",
+    elevation: 4,
   },
   modalWrapper: {
     flex: 1,
