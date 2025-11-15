@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Modal,
@@ -18,6 +19,10 @@ export default function Index() {
   // Search + Filter
   const [search, setSearch] = useState("");
   const [showFavOnly, setShowFavOnly] = useState(false);
+
+  // Import loading / error
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState("");
 
   // Modal thêm/sửa
   const [modalVisible, setModalVisible] = useState(false);
@@ -114,10 +119,10 @@ export default function Index() {
     const newValue = favorite === 1 ? 0 : 1;
 
     const db = await getDb();
-    await db.runAsync(
-      "UPDATE contacts SET favorite = ? WHERE id = ?",
-      [newValue, id]
-    );
+    await db.runAsync("UPDATE contacts SET favorite = ? WHERE id = ?", [
+      newValue,
+      id,
+    ]);
 
     loadContacts();
   }
@@ -126,22 +131,18 @@ export default function Index() {
   //     DELETE CONTACT
   // ======================
   async function deleteContact(id: number) {
-    Alert.alert(
-      "Xóa liên hệ",
-      "Bạn có chắc muốn xóa liên hệ này?",
-      [
-        { text: "Hủy", style: "cancel" },
-        {
-          text: "Xóa",
-          style: "destructive",
-          onPress: async () => {
-            const db = await getDb();
-            await db.runAsync("DELETE FROM contacts WHERE id = ?", [id]);
-            loadContacts();
-          },
+    Alert.alert("Xóa liên hệ", "Bạn có chắc muốn xóa liên hệ này?", [
+      { text: "Hủy", style: "cancel" },
+      {
+        text: "Xóa",
+        style: "destructive",
+        onPress: async () => {
+          const db = await getDb();
+          await db.runAsync("DELETE FROM contacts WHERE id = ?", [id]);
+          loadContacts();
         },
-      ]
-    );
+      },
+    ]);
   }
 
   // ======================
@@ -158,7 +159,53 @@ export default function Index() {
   }
 
   // ======================
-  //     SEARCH + FAVORITE FILTER (useMemo)
+  //     CÂU 9 – Import từ API
+  // ======================
+  async function importFromApi() {
+    try {
+      setImporting(true);
+      setImportError("");
+
+      const response = await fetch(
+        "https://jsonplaceholder.typicode.com/users"
+      );
+
+      if (!response.ok) throw new Error("Không thể tải dữ liệu từ API");
+
+      const data = await response.json();
+
+      const db = await getDb();
+
+      for (let item of data) {
+        const name = item.name;
+        const phone = item.phone || "";
+        const email = item.email || "";
+
+        // Check trùng phone
+        const exists = await db.getFirstAsync(
+          "SELECT * FROM contacts WHERE phone = ?",
+          [phone]
+        );
+
+        if (!exists) {
+          await db.runAsync(
+            `INSERT INTO contacts (name, phone, email, favorite, created_at)
+             VALUES (?, ?, ?, ?, ?)`,
+            [name, phone, email, 0, Date.now()]
+          );
+        }
+      }
+
+      loadContacts();
+    } catch (err: any) {
+      setImportError(err.message || "Lỗi khi import API");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  // ======================
+  //   SEARCH + FILTER
   // ======================
   const filteredContacts = useMemo(() => {
     const keyword = search.toLowerCase().trim();
@@ -175,7 +222,7 @@ export default function Index() {
   }, [search, showFavOnly, contacts]);
 
   // ======================
-  //     LIST ITEM UI
+  //     UI LIST ITEM
   // ======================
   const renderItem = ({ item }: any) => (
     <View style={styles.card}>
@@ -215,7 +262,7 @@ export default function Index() {
     <View style={styles.container}>
       <Text style={styles.title}>Danh sách liên hệ</Text>
 
-      {/* Ô tìm kiếm */}
+      {/* Search */}
       <TextInput
         style={styles.searchBox}
         placeholder="Tìm kiếm theo tên hoặc số điện thoại..."
@@ -223,7 +270,7 @@ export default function Index() {
         onChangeText={setSearch}
       />
 
-      {/* Nút lọc favorite */}
+      {/* Favorite filter */}
       <TouchableOpacity
         style={styles.filterBtn}
         onPress={() => setShowFavOnly(!showFavOnly)}
@@ -232,6 +279,25 @@ export default function Index() {
           {showFavOnly ? "Hiện tất cả" : "Chỉ Favorite"}
         </Text>
       </TouchableOpacity>
+
+      {/* Import API button */}
+      <TouchableOpacity
+        style={styles.importBtn}
+        onPress={importFromApi}
+        disabled={importing}
+      >
+        {importing ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={{ color: "white", fontWeight: "600" }}>
+            Import từ API
+          </Text>
+        )}
+      </TouchableOpacity>
+
+      {importError !== "" && (
+        <Text style={{ color: "red", marginBottom: 10 }}>{importError}</Text>
+      )}
 
       {loading ? (
         <Text style={styles.empty}>Đang tải...</Text>
@@ -327,7 +393,6 @@ const styles = StyleSheet.create({
     color: "#222",
   },
 
-  // Search
   searchBox: {
     backgroundColor: "#FFF",
     padding: 12,
@@ -339,6 +404,15 @@ const styles = StyleSheet.create({
 
   filterBtn: {
     backgroundColor: "#007bff",
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+    marginBottom: 10,
+  },
+
+  importBtn: {
+    backgroundColor: "#28a745",
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderRadius: 8,
