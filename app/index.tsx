@@ -37,6 +37,24 @@ export default function Index() {
     setLoading(false);
   }
 
+  // ======================
+  //   CÂU 5 – TOGGLE FAVORITE
+  // ======================
+  async function toggleFavorite(id: number, favorite: number) {
+    const newValue = favorite === 1 ? 0 : 1;
+
+    const db = await getDb();
+    await db.runAsync(
+      "UPDATE contacts SET favorite = ? WHERE id = ?",
+      [newValue, id]
+    );
+
+    loadContacts();
+  }
+
+  // ======================
+  //   THÊM CONTACT (CÂU 4)
+  // ======================
   async function addContact() {
     if (name.trim() === "") {
       Alert.alert("Lỗi", "Tên không được để trống.");
@@ -56,18 +74,19 @@ export default function Index() {
       [name, phone, email, 0, Date.now()]
     );
 
-    // Reset form
     setName("");
     setPhone("");
-   	setEmail("");
+    setEmail("");
     setModalVisible(false);
 
-    // Load lại danh sách
     loadContacts();
   }
 
+  // ======================
+  //   RENDER ITEM
+  // ======================
   const renderItem = ({ item }: any) => (
-    <TouchableOpacity style={styles.card}>
+    <View style={styles.card}>
       <View style={{ flexDirection: "column" }}>
         <Text style={styles.name}>{item.name}</Text>
         <Text style={styles.phone}>
@@ -75,10 +94,15 @@ export default function Index() {
         </Text>
       </View>
 
-      {Number(item.favorite) === 1 && (
-        <Text style={{ fontSize: 22 }}>⭐</Text>
-      )}
-    </TouchableOpacity>
+      {/* ICON FAVORITE – CHẠM ĐỂ TOGGLE */}
+      <TouchableOpacity
+        onPress={() => toggleFavorite(item.id, Number(item.favorite))}
+      >
+        <Text style={{ fontSize: 26 }}>
+          {Number(item.favorite) === 1 ? "⭐" : "☆"}
+        </Text>
+      </TouchableOpacity>
+    </View>
   );
 
   return (
@@ -106,7 +130,7 @@ export default function Index() {
         <Text style={{ fontSize: 32, color: "white" }}>＋</Text>
       </TouchableOpacity>
 
-      {/* Modal thêm liên hệ */}
+      {/* Modal Thêm contact */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalWrapper}>
           <View style={styles.modalContent}>
@@ -155,10 +179,9 @@ export default function Index() {
   );
 }
 
-// =====================
-//     STYLES
-// =====================
-
+// ======================
+//        STYLES
+// ======================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -180,6 +203,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+
     shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 6,
