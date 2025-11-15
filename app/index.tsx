@@ -67,7 +67,7 @@ export default function Index() {
   }
 
   // ======================
-  //     CÂU 6 – SỬA CONTACT
+  //     SỬA CONTACT
   // ======================
   async function updateContact() {
     if (name.trim() === "") {
@@ -93,6 +93,7 @@ export default function Index() {
     loadContacts();
   }
 
+  // reset modal form
   function resetForm() {
     setName("");
     setPhone("");
@@ -115,6 +116,28 @@ export default function Index() {
     );
 
     loadContacts();
+  }
+
+  // ======================
+  //     DELETE CONTACT (CÂU 7)
+  // ======================
+  async function deleteContact(id: number) {
+    Alert.alert(
+      "Xóa liên hệ",
+      "Bạn có chắc muốn xóa liên hệ này?",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: async () => {
+            const db = await getDb();
+            await db.runAsync("DELETE FROM contacts WHERE id = ?", [id]);
+            loadContacts();
+          },
+        },
+      ]
+    );
   }
 
   // ======================
@@ -142,7 +165,7 @@ export default function Index() {
         </Text>
       </View>
 
-      {/* ICON FAVORITE */}
+      {/* STAR FAVORITE */}
       <TouchableOpacity
         onPress={() => toggleFavorite(item.id, Number(item.favorite))}
         style={{ marginRight: 12 }}
@@ -152,9 +175,17 @@ export default function Index() {
         </Text>
       </TouchableOpacity>
 
-      {/* NÚT SỬA */}
-      <TouchableOpacity onPress={() => openEditModal(item)}>
+      {/* EDIT BUTTON */}
+      <TouchableOpacity
+        style={{ marginRight: 12 }}
+        onPress={() => openEditModal(item)}
+      >
         <Text style={{ fontSize: 20 }}>✏️</Text>
+      </TouchableOpacity>
+
+      {/* DELETE BUTTON */}
+      <TouchableOpacity onPress={() => deleteContact(item.id)}>
+        <Text style={{ fontSize: 22, color: "red" }}>❌</Text>
       </TouchableOpacity>
     </View>
   );
