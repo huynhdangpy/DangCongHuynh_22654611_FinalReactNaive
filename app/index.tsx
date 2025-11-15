@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
   StyleSheet,
@@ -10,248 +9,103 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { getDb } from "../src/db";
+import { useContacts } from "../src/useContacts";
 
 export default function Index() {
-  const [contacts, setContacts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    contacts,
+    loading,
+    importing,
+    importError,
 
-  // Search + Filter
-  const [search, setSearch] = useState("");
-  const [showFavOnly, setShowFavOnly] = useState(false);
+    search,
+    setSearch,
+    showFavOnly,
+    setShowFavOnly,
 
-  // Import loading / error
-  const [importing, setImporting] = useState(false);
-  const [importError, setImportError] = useState("");
+    addContact,
+    updateContact,
+    deleteContact,
+    toggleFavorite,
+    importFromApi,
+  } = useContacts();
 
-  // Modal thêm/sửa
+  // Modal
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
 
-  // form fields
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [idEdit, setIdEdit] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
 
-  useEffect(() => {
-    loadContacts();
-  }, []);
-
-  async function loadContacts() {
-    setLoading(true);
-
-    const db = await getDb();
-    const result = await db.getAllAsync(
-      "SELECT * FROM contacts ORDER BY favorite DESC, name ASC"
-    );
-
-    setContacts(result);
-    setLoading(false);
-  }
-
-  // ======================
-  //     THÊM CONTACT
-  // ======================
-  async function addContact() {
-    if (name.trim() === "") {
-      Alert.alert("Lỗi", "Tên không được để trống.");
-      return;
-    }
-    if (email.trim() !== "" && !email.includes("@")) {
-      Alert.alert("Lỗi", "Email không hợp lệ.");
-      return;
-    }
-
-    const db = await getDb();
-
-    await db.runAsync(
-      `INSERT INTO contacts (name, phone, email, favorite, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
-      [name, phone, email, 0, Date.now()]
-    );
-
-    resetForm();
-    loadContacts();
-  }
-
-  // ======================
-  //     SỬA CONTACT
-  // ======================
-  async function updateContact() {
-    if (name.trim() === "") {
-      Alert.alert("Lỗi", "Tên không được để trống");
-      return;
-    }
-    if (email.trim() !== "" && !email.includes("@")) {
-      Alert.alert("Lỗi", "Email không hợp lệ.");
-      return;
-    }
-    if (editingId === null) return;
-
-    const db = await getDb();
-
-    await db.runAsync(
-      `UPDATE contacts
-       SET name = ?, phone = ?, email = ?
-       WHERE id = ?`,
-      [name, phone, email, editingId]
-    );
-
-    resetForm();
-    loadContacts();
-  }
-
-  // reset modal form
-  function resetForm() {
-    setName("");
-    setPhone("");
-    setEmail("");
-    setEditingId(null);
-    setIsEdit(false);
-    setModalVisible(false);
-  }
-
-  // ======================
-  //     TOGGLE FAVORITE
-  // ======================
-  async function toggleFavorite(id: number, favorite: number) {
-    const newValue = favorite === 1 ? 0 : 1;
-
-    const db = await getDb();
-    await db.runAsync("UPDATE contacts SET favorite = ? WHERE id = ?", [
-      newValue,
-      id,
-    ]);
-
-    loadContacts();
-  }
-
-  // ======================
-  //     DELETE CONTACT
-  // ======================
-  async function deleteContact(id: number) {
-    Alert.alert("Xóa liên hệ", "Bạn có chắc muốn xóa liên hệ này?", [
-      { text: "Hủy", style: "cancel" },
-      {
-        text: "Xóa",
-        style: "destructive",
-        onPress: async () => {
-          const db = await getDb();
-          await db.runAsync("DELETE FROM contacts WHERE id = ?", [id]);
-          loadContacts();
-        },
-      },
-    ]);
-  }
-
-  // ======================
-  //     MỞ MODAL EDIT
-  // ======================
-  function openEditModal(item: any) {
-    setEditingId(item.id);
-    setName(item.name);
-    setPhone(item.phone);
-    setEmail(item.email);
+  function openEdit(c: any) {
+    setIdEdit(c.id);
+    setName(c.name);
+    setPhone(c.phone);
+    setEmail(c.email);
 
     setIsEdit(true);
     setModalVisible(true);
   }
 
-  // ======================
-  //     CÂU 9 – Import từ API
-  // ======================
-  async function importFromApi() {
-    try {
-      setImporting(true);
-      setImportError("");
-
-      const response = await fetch(
-        "https://jsonplaceholder.typicode.com/users"
-      );
-
-      if (!response.ok) throw new Error("Không thể tải dữ liệu từ API");
-
-      const data = await response.json();
-
-      const db = await getDb();
-
-      for (let item of data) {
-        const name = item.name;
-        const phone = item.phone || "";
-        const email = item.email || "";
-
-        // Check trùng phone
-        const exists = await db.getFirstAsync(
-          "SELECT * FROM contacts WHERE phone = ?",
-          [phone]
-        );
-
-        if (!exists) {
-          await db.runAsync(
-            `INSERT INTO contacts (name, phone, email, favorite, created_at)
-             VALUES (?, ?, ?, ?, ?)`,
-            [name, phone, email, 0, Date.now()]
-          );
-        }
-      }
-
-      loadContacts();
-    } catch (err: any) {
-      setImportError(err.message || "Lỗi khi import API");
-    } finally {
-      setImporting(false);
-    }
+  function resetForm() {
+    setIdEdit(null);
+    setName("");
+    setPhone("");
+    setEmail("");
+    setIsEdit(false);
+    setModalVisible(false);
   }
 
-  // ======================
-  //   SEARCH + FILTER
-  // ======================
-  const filteredContacts = useMemo(() => {
-    const keyword = search.toLowerCase().trim();
+  async function onSave() {
+    if (isEdit) {
+      await updateContact(idEdit!, name, phone, email);
+    } else {
+      await addContact(name, phone, email);
+    }
+    resetForm();
+  }
 
-    return contacts.filter((c) => {
-      const matchText =
-        c.name.toLowerCase().includes(keyword) ||
-        (c.phone && c.phone.includes(keyword));
-
-      const matchFav = showFavOnly ? Number(c.favorite) === 1 : true;
-
-      return matchText && matchFav;
-    });
-  }, [search, showFavOnly, contacts]);
-
-  // ======================
-  //     UI LIST ITEM
-  // ======================
   const renderItem = ({ item }: any) => (
-    <View style={styles.card}>
-      <View style={{ flexDirection: "column", flex: 1 }}>
-        <Text style={styles.name}>{item.name}</Text>
-        <Text style={styles.phone}>
-          {item.phone || "Không có số điện thoại"}
+    <View
+      style={[
+        styles.card,
+        Number(item.favorite) === 1 && styles.cardFavorite, // highlight UI
+      ]}
+    >
+      <View style={{ flex: 1 }}>
+        <Text
+          style={[
+            styles.name,
+            Number(item.favorite) === 1 && { color: "#b88600" },
+          ]}
+        >
+          {item.name}
         </Text>
+        <Text style={styles.phone}>{item.phone}</Text>
+        {item.email ? <Text style={styles.email}>{item.email}</Text> : null}
       </View>
 
-      {/* STAR FAVORITE */}
+      {/* STAR */}
       <TouchableOpacity
+        style={{ marginRight: 14 }}
         onPress={() => toggleFavorite(item.id, Number(item.favorite))}
-        style={{ marginRight: 12 }}
       >
         <Text style={{ fontSize: 26 }}>
           {Number(item.favorite) === 1 ? "⭐" : "☆"}
         </Text>
       </TouchableOpacity>
 
-      {/* EDIT BUTTON */}
+      {/* EDIT */}
       <TouchableOpacity
-        style={{ marginRight: 12 }}
-        onPress={() => openEditModal(item)}
+        style={{ marginRight: 14 }}
+        onPress={() => openEdit(item)}
       >
         <Text style={{ fontSize: 20 }}>✏️</Text>
       </TouchableOpacity>
 
-      {/* DELETE BUTTON */}
+      {/* DELETE */}
       <TouchableOpacity onPress={() => deleteContact(item.id)}>
         <Text style={{ fontSize: 22, color: "red" }}>❌</Text>
       </TouchableOpacity>
@@ -262,25 +116,22 @@ export default function Index() {
     <View style={styles.container}>
       <Text style={styles.title}>Danh sách liên hệ</Text>
 
-      {/* Search */}
       <TextInput
-        style={styles.searchBox}
-        placeholder="Tìm kiếm theo tên hoặc số điện thoại..."
+        style={styles.search}
+        placeholder="Tìm kiếm theo tên / số điện thoại"
         value={search}
         onChangeText={setSearch}
       />
 
-      {/* Favorite filter */}
       <TouchableOpacity
-        style={styles.filterBtn}
+        style={styles.filter}
         onPress={() => setShowFavOnly(!showFavOnly)}
       >
-        <Text style={{ color: "white", fontWeight: "600" }}>
+        <Text style={{ color: "#fff", fontWeight: "600" }}>
           {showFavOnly ? "Hiện tất cả" : "Chỉ Favorite"}
         </Text>
       </TouchableOpacity>
 
-      {/* Import API button */}
       <TouchableOpacity
         style={styles.importBtn}
         onPress={importFromApi}
@@ -289,9 +140,7 @@ export default function Index() {
         {importing ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={{ color: "white", fontWeight: "600" }}>
-            Import từ API
-          </Text>
+          <Text style={{ color: "#fff" }}>Import từ API</Text>
         )}
       </TouchableOpacity>
 
@@ -300,19 +149,25 @@ export default function Index() {
       )}
 
       {loading ? (
-        <Text style={styles.empty}>Đang tải...</Text>
-      ) : filteredContacts.length === 0 ? (
-        <Text style={styles.empty}>Không tìm thấy liên hệ.</Text>
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyIcon}>📭</Text>
+          <Text style={styles.emptyText}>Đang tải...</Text>
+        </View>
+      ) : contacts.length === 0 ? (
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyIcon}>📭</Text>
+          <Text style={styles.emptyText}>Không có liên hệ nào.</Text>
+        </View>
       ) : (
         <FlatList
-          data={filteredContacts}
-          keyExtractor={(item) => item.id.toString()}
+          data={contacts}
           renderItem={renderItem}
+          keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={{ paddingBottom: 100 }}
         />
       )}
 
-      {/* Nút thêm (+) */}
+      {/* FAB */}
       <TouchableOpacity
         style={styles.fab}
         onPress={() => {
@@ -320,31 +175,29 @@ export default function Index() {
           setModalVisible(true);
         }}
       >
-        <Text style={{ fontSize: 32, color: "white" }}>＋</Text>
+        <Text style={{ fontSize: 32, color: "#fff" }}>＋</Text>
       </TouchableOpacity>
 
-      {/* Modal thêm/sửa */}
+      {/* Modal */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalWrapper}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>
               {isEdit ? "Sửa liên hệ" : "Thêm liên hệ"}
             </Text>
 
             <TextInput
-              placeholder="Tên (bắt buộc)"
+              placeholder="Tên"
               style={styles.input}
               value={name}
               onChangeText={setName}
             />
-
             <TextInput
               placeholder="Số điện thoại"
               style={styles.input}
               value={phone}
               onChangeText={setPhone}
             />
-
             <TextInput
               placeholder="Email"
               style={styles.input}
@@ -352,20 +205,20 @@ export default function Index() {
               onChangeText={setEmail}
             />
 
-            <View style={styles.modalButtons}>
+            <View style={styles.modalRow}>
               <TouchableOpacity
-                style={[styles.btn, { backgroundColor: "#CCC" }]}
+                style={[styles.btn, { backgroundColor: "#ccc" }]}
                 onPress={resetForm}
               >
-                <Text style={styles.btnText}>Hủy</Text>
+                <Text>Hủy</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.btn, { backgroundColor: "#007bff" }]}
-                onPress={isEdit ? updateContact : addContact}
+                onPress={onSave}
               >
-                <Text style={styles.btnText}>
-                  {isEdit ? "Cập nhật" : "Lưu"}
+                <Text style={{ color: "#fff" }}>
+                  {isEdit ? "Lưu" : "Thêm"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -382,120 +235,131 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 50,
-    paddingHorizontal: 20,
+    paddingTop: 55,
+    paddingHorizontal: 18,
     backgroundColor: "#F8F9FA",
   },
+
   title: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: "bold",
-    marginBottom: 20,
-    color: "#222",
+    marginBottom: 15,
   },
 
-  searchBox: {
+  search: {
     backgroundColor: "#FFF",
     padding: 12,
     borderRadius: 10,
-    marginBottom: 10,
+    borderColor: "#ddd",
     borderWidth: 1,
-    borderColor: "#DDD",
+    marginBottom: 12,
   },
 
-  filterBtn: {
+  filter: {
     backgroundColor: "#007bff",
     paddingVertical: 10,
     paddingHorizontal: 15,
-    borderRadius: 8,
+    borderRadius: 10,
+    marginBottom: 12,
     alignSelf: "flex-start",
-    marginBottom: 10,
   },
 
   importBtn: {
     backgroundColor: "#28a745",
     paddingVertical: 10,
     paddingHorizontal: 15,
-    borderRadius: 8,
+    borderRadius: 10,
+    marginBottom: 12,
     alignSelf: "flex-start",
-    marginBottom: 15,
+  },
+
+  emptyBox: {
+    marginTop: 80,
+    alignItems: "center",
+  },
+  emptyIcon: {
+    fontSize: 50,
+  },
+  emptyText: {
+    marginTop: 10,
+    fontSize: 18,
+    color: "#777",
   },
 
   card: {
-    backgroundColor: "white",
+    backgroundColor: "#FFF",
     padding: 16,
     borderRadius: 12,
-    marginBottom: 14,
+    marginBottom: 12,
     flexDirection: "row",
     alignItems: "center",
-
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
+
+  cardFavorite: {
+    backgroundColor: "#FFF7D1",
+    borderColor: "#FFD76E",
+    borderWidth: 1,
+  },
+
   name: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#333",
   },
   phone: {
-    fontSize: 15,
     color: "#777",
-    marginTop: 3,
   },
-  empty: {
-    marginTop: 60,
-    fontSize: 18,
-    color: "#888",
-    textAlign: "center",
+  email: {
+    color: "#999",
   },
+
   fab: {
     position: "absolute",
-    bottom: 30,
-    right: 30,
+    bottom: 25,
+    right: 25,
     backgroundColor: "#007bff",
     width: 60,
     height: 60,
-    borderRadius: 50,
+    borderRadius: 30,
     justifyContent: "center",
     alignItems: "center",
     elevation: 4,
   },
+
   modalWrapper: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.3)",
     justifyContent: "center",
     padding: 20,
   },
-  modalContent: {
-    backgroundColor: "white",
+
+  modalBox: {
+    backgroundColor: "#fff",
     borderRadius: 12,
     padding: 20,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: "600",
-    marginBottom: 15,
-  },
-  input: {
-    backgroundColor: "#F1F1F1",
-    padding: 12,
-    borderRadius: 8,
+    fontWeight: "700",
     marginBottom: 12,
   },
-  modalButtons: {
+
+  input: {
+    backgroundColor: "#f1f1f1",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+
+  modalRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
+    marginTop: 10,
   },
+
   btn: {
     paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 6,
+    paddingHorizontal: 15,
     marginLeft: 10,
-  },
-  btnText: {
-    color: "white",
-    fontWeight: "600",
+    borderRadius: 8,
   },
 });
